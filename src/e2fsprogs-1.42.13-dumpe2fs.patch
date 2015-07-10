@@ -1,0 +1,101 @@
+--- e2fsprogs-1.42.13/misc/dumpe2fs.c.orig	2014-12-26 20:25:56.000000000 -0800
++++ e2fsprogs-1.42.13/misc/dumpe2fs.c	2015-06-22 13:17:11.462696024 -0700
+@@ -53,7 +53,7 @@
+ static void usage(void)
+ {
+ 	fprintf (stderr, _("Usage: %s [-bfhixV] [-o superblock=<num>] "
+-		 "[-o blocksize=<num>] device\n"), program_name);
++		 "[-o blocksize=<num>] [-g <block group number> ] device\n"), program_name);
+ 	exit (1);
+ }
+ 
+@@ -150,7 +150,7 @@
+ 	}
+ }
+ 
+-static void list_desc (ext2_filsys fs)
++static void list_desc (ext2_filsys fs, int grp)
+ {
+ 	unsigned long i;
+ 	blk64_t	first_block, last_block;
+@@ -187,7 +187,16 @@
+ 		old_desc_blocks = fs->super->s_first_meta_bg;
+ 	else
+ 		old_desc_blocks = fs->desc_blocks;
+-	for (i = 0; i < fs->group_desc_count; i++) {
++//	for (i = 0; i < fs->group_desc_count; i++) {
++        for (i = 0; 
++	     i < fs->group_desc_count; 
++			 i++, 
++			 blk_itr += fs->super->s_blocks_per_group, 
++			 ino_itr += fs->super->s_inodes_per_group) {
++//		if (i < grp)
++//			continue;
++		if (i > grp)
++			break;
+ 		first_block = ext2fs_group_first_block2(fs, i);
+ 		last_block = ext2fs_group_last_block2(fs, i);
+ 
+@@ -268,7 +277,7 @@
+ 					   fs->super->s_first_data_block,
+ 					   EXT2FS_CLUSTER_RATIO(fs));
+ 			fputc('\n', stdout);
+-			blk_itr += fs->super->s_clusters_per_group;
++			//blk_itr += fs->super->s_clusters_per_group;
+ 		}
+ 		if (inode_bitmap) {
+ 			fputs(_("  Free inodes: "), stdout);
+@@ -282,7 +291,7 @@
+ 					   fs->super->s_inodes_per_group,
+ 					   1, 1);
+ 			fputc('\n', stdout);
+-			ino_itr += fs->super->s_inodes_per_group;
++			//ino_itr += fs->super->s_inodes_per_group;
+ 		}
+ 	}
+ 	if (block_bitmap)
+@@ -531,6 +540,7 @@
+ 	int		flags;
+ 	int		header_only = 0;
+ 	int		c;
++	int		grp = 0;
+ 
+ #ifdef ENABLE_NLS
+ 	setlocale(LC_MESSAGES, "");
+@@ -545,8 +555,12 @@
+ 	if (argc && *argv)
+ 		program_name = *argv;
+ 
+-	while ((c = getopt (argc, argv, "bfhixVo:")) != EOF) {
++	while ((c = getopt (argc, argv, "bfhixVo:g:")) != EOF) {
+ 		switch (c) {
++		case 'g':
++			grp = strtol(optarg,0,0);
++			grp = ( grp >= 0 && grp < 131056 ) ? grp : 0;
++			break;
+ 		case 'b':
+ 			print_badblocks++;
+ 			break;
+@@ -628,13 +642,15 @@
+ 			ext2fs_close_free(&fs);
+ 			exit (0);
+ 		}
+-		retval = ext2fs_read_bitmaps (fs);
+-		list_desc (fs);
+-		if (retval) {
+-			printf(_("\n%s: %s: error reading bitmaps: %s\n"),
+-			       program_name, device_name,
+-			       error_message(retval));
+-		}
++    if (grp)  {
++  		retval = ext2fs_read_bitmaps (fs);
++  		list_desc (fs, grp);
++  		if (retval) {
++  			printf(_("\n%s: %s: error reading bitmaps: %s\n"),
++  			       program_name, device_name,
++  			       error_message(retval));
++  		}
++    }
+ 	}
+ 	ext2fs_close_free(&fs);
+ 	remove_error_table(&et_ext2_error_table);
